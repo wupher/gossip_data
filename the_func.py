@@ -83,15 +83,15 @@ def compare_analysis(
             f"{week_label1}单日峰值为 {peak_day1} {int(peak_val1):,} 元，{week_label2}为 {peak_day2} {int(peak_val2):,} 元，增长率为 {peak_growth}。\n"
         )
 
-    # 主流程开始
+    # from here to running the process
     df1 = preprocess(data_source1)
     df2 = preprocess(data_source2)
 
-    # 提取各自自然周数据
+    # calculate week
     df1_week, week_label1 = extract_single_week(df1)
     df2_week, week_label2 = extract_single_week(df2)
 
-    # 判断哪个是第一周
+    # check the date which is first week
     is_df1_first = pd.to_datetime(df1_week['pdate'].min()) <= pd.to_datetime(df2_week['pdate'].min())
     first_df, second_df = (df1_week, df2_week) if is_df1_first else (df2_week, df1_week)
     first_label = get_week_date_range_label(first_df)
@@ -104,7 +104,7 @@ def compare_analysis(
         summary1 = calculate_summary(first_df, metric)
         summary2 = calculate_summary(second_df, metric)
 
-        # 汇总输出
+        # output summary
         output[f"{metric}_summary"] = {
             "第一周": first_label,
             "第二周": second_label,
@@ -135,7 +135,7 @@ def compare_analysis(
             output[f"{metric}_table"] = weekday_table
             output[f"{metric}_tablemd"] = build_markdown_table(weekday_table)
 
-        # 中文报告
+        # report
         report_text = generate_report(metric, summary1, summary2, first_label, second_label)
         output[f"{metric}_report"] = report_text
 
