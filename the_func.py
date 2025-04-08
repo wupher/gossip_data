@@ -35,6 +35,14 @@ def compare_analysis(
             return "N/A"
         return f"{((new - old) / old * 100):.2f}%"
 
+    def build_markdown_table(table_data):
+        header = "| 日期 | 第一组 | 第二组 | 增长率 |\n"
+        separator = "|------|--------|--------|--------|\n"
+        rows = ""
+        for row in table_data:
+            rows += f"| {row['日期']} | {row['第一组']} | {row['第二组']} | {row['增长率']} |\n"
+        return header + separator + rows
+
     df1 = preprocess(data_source1)
     df2 = preprocess(data_source2)
 
@@ -74,5 +82,7 @@ def compare_analysis(
                 weekday_table.append(row)
 
             output[f"{metric}_table"] = weekday_table
+            md_table = build_markdown_table(weekday_table)
+            output[f"{metric}_tablemd"] = md_table
 
     return output
