@@ -1,7 +1,8 @@
 import json
 from typing import List
+
 import pandas as pd
-from datetime import datetime
+
 
 def compare_analysis(
     data_source1: json,
