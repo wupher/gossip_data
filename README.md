@@ -138,3 +138,36 @@ dimensions = ['pdate'] 这参数是统计的时间，可以为 'pdate' 用于按
             }
 >>> 
 这样的表格。
+
+### echarts
+
+ "line":[
+            // echarts line配置 output_type=line 时返回
+            //可能多份配置
+            {
+                  xAxis: {
+                    type: 'category',
+                    data: ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
+                  },
+                  yAxis: {
+                    type: 'value'
+                  },
+                  legend: {
+                    data: ['上周', '本周']
+                  },
+                  series: [
+                    {
+                      data: [752380, 2760570, 1472260, 1702150, 1566400, 2729400, 1315300],
+                      type: 'line',
+                      name:"上周",
+                      smooth: true
+                    },
+                    {
+                      name:"本周",
+                      data: [828570, 968990, 1347980, 1407380, 1893160, 1536000, 1217400],
+                      type: 'line',
+                      smooth: true
+                    }
+                  ]
+            }     
+        ]
