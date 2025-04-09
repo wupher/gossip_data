@@ -171,3 +171,12 @@ dimensions = ['pdate'] 这参数是统计的时间，可以为 'pdate' 用于按
                   ]
             }     
         ]
+
+## dimension month
+
+compare_analysis 函数现在要增加对新的 dimensions = ["month"] 的支持。
+
+当 dimensions 为 month 时，传入的 `data_source1` `data_source1` 的数据长度会超过 7 天。 此时数据比对的维度就不能按 “周一”，“周二”
+这个星期维度来的。只能按“第一天”，“第二天” ... "第 N 天"这样进行比较。
+
+当然，dimension 为 month 的时候也要支持生成表格和拆线图输出。

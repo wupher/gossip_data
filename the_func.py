@@ -15,25 +15,24 @@ def compare_analysis(
     def preprocess(data):
         df = pd.DataFrame(data)
         df['pdate'] = pd.to_datetime(df['pdate'])
-        df['weekday'] = df['pdate'].dt.dayofweek  # 周一=0
+        df = df.sort_values(by='pdate').reset_index(drop=True)
+        df['weekday'] = df['pdate'].dt.dayofweek
         df['weekday_name'] = df['pdate'].dt.day_name()
-        df['year_week'] = df['pdate'].dt.strftime('%G-W%V')  # ISO 周编号
+        df['year_week'] = df['pdate'].dt.strftime('%G-W%V')
+        df['day_number'] = df.index + 1  # 月维度用
         return df
 
-    # 获取最新自然周的数据和标签
     def extract_single_week(df):
         all_weeks = df['year_week'].unique()
         latest_week = sorted(all_weeks)[-1]
         df_week = df[df['year_week'] == latest_week]
         return df_week, latest_week
 
-    # 生成时间范围字符串
     def get_week_date_range_label(df):
         start = df['pdate'].min().strftime('%Y-%m-%d')
         end = df['pdate'].max().strftime('%Y-%m-%d')
         return f"{start} ~ {end}"
 
-    # 汇总统计
     def calculate_summary(df, metric):
         total = df[metric].sum()
         daily_avg = df[metric].mean()
@@ -83,10 +82,10 @@ def compare_analysis(
             f"{week_label1} 单日峰值为 {peak_day1} {int(peak_val1):,} 元，{week_label2} 为 {peak_day2} {int(peak_val2):,} 元，增长率为 {peak_growth}。\n"
         )
 
-    def generate_echarts_line(metric, weekday_data, first_label, second_label):
-        x_data = [row["日期"] for row in weekday_data]
-        first_data = [row["第一组"] for row in weekday_data]
-        second_data = [row["第二组"] for row in weekday_data]
+    def generate_echarts_line(metric, table_data, first_label, second_label):
+        x_data = [row["日期"] for row in table_data]
+        first_data = [row["第一组"] for row in table_data]
+        second_data = [row["第二组"] for row in table_data]
 
         return [{
             "xAxis": {
@@ -115,15 +114,20 @@ def compare_analysis(
             ]
         }]
 
-    # 执行流程
+    # 主流程
+    is_month_mode = dimensions == ["month"]
+
     df1 = preprocess(data_source1)
     df2 = preprocess(data_source2)
-    df1_week, _ = extract_single_week(df1)
-    df2_week, _ = extract_single_week(df2)
 
-    # 按时间判断前后周
-    is_df1_first = pd.to_datetime(df1_week['pdate'].min()) <= pd.to_datetime(df2_week['pdate'].min())
-    first_df, second_df = (df1_week, df2_week) if is_df1_first else (df2_week, df1_week)
+    if is_month_mode:
+        first_df, second_df = df1, df2
+    else:
+        df1, _ = extract_single_week(df1)
+        df2, _ = extract_single_week(df2)
+        is_df1_first = pd.to_datetime(df1['pdate'].min()) <= pd.to_datetime(df2['pdate'].min())
+        first_df, second_df = (df1, df2) if is_df1_first else (df2, df1)
+
     first_label = get_week_date_range_label(first_df)
     second_label = get_week_date_range_label(second_df)
 
@@ -134,10 +138,10 @@ def compare_analysis(
         summary1 = calculate_summary(first_df, metric)
         summary2 = calculate_summary(second_df, metric)
 
-        # 汇总结果
+        # 汇总输出
         output[f"{metric}_summary"] = {
-            "第一周时间范围": first_label,
-            "第二周时间范围": second_label,
+            "第一组时间范围": first_label,
+            "第二组时间范围": second_label,
             "组1总营收": summary1['total'],
             "组2总营收": summary2['total'],
             "总营收增长率": growth_rate(summary2['total'], summary1['total']),
@@ -149,24 +153,38 @@ def compare_analysis(
             "峰值增长率": growth_rate(summary2['peak_value'], summary1['peak_value']),
         }
 
-        # 表格数据（按 weekday 汇总）
-        weekday_table = []
-        for i in range(7):
-            val1 = first_df[first_df['weekday'] == i][metric].sum()
-            val2 = second_df[second_df['weekday'] == i][metric].sum()
-            row = {
-                "日期": weekday_map[i],
-                "第一组": round(val1, 2),
-                "第二组": round(val2, 2),
-                "增长率": growth_rate(val2, val1)
-            }
-            weekday_table.append(row)
+        # 表格数据构建
+        table_data = []
 
-        output[f"{metric}_table"] = weekday_table
-        output[f"{metric}_tablemd"] = build_markdown_table(weekday_table)
+        if is_month_mode:
+            max_days = max(len(first_df), len(second_df))
+            for i in range(max_days):
+                label = f"第{i+1}天"
+                val1 = first_df.iloc[i][metric] if i < len(first_df) else 0
+                val2 = second_df.iloc[i][metric] if i < len(second_df) else 0
+                table_data.append({
+                    "日期": label,
+                    "第一组": round(val1, 2),
+                    "第二组": round(val2, 2),
+                    "增长率": growth_rate(val2, val1)
+                })
+        else:
+            for i in range(7):
+                label = weekday_map[i]
+                val1 = first_df[first_df['weekday'] == i][metric].sum()
+                val2 = second_df[second_df['weekday'] == i][metric].sum()
+                table_data.append({
+                    "日期": label,
+                    "第一组": round(val1, 2),
+                    "第二组": round(val2, 2),
+                    "增长率": growth_rate(val2, val1)
+                })
+
+        output[f"{metric}_table"] = table_data
+        output[f"{metric}_tablemd"] = build_markdown_table(table_data)
         output[f"{metric}_report"] = generate_report(metric, summary1, summary2, first_label, second_label)
 
         if output_type == "line":
-            output[f"{metric}_line"] = generate_echarts_line(metric, weekday_table, first_label, second_label)
+            output[f"{metric}_line"] = generate_echarts_line(metric, table_data, first_label, second_label)
 
     return output
