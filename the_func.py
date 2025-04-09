@@ -1,8 +1,7 @@
 import json
 from typing import List
-
 import pandas as pd
-
+from datetime import datetime
 
 def compare_analysis(
     data_source1: json,
@@ -11,7 +10,6 @@ def compare_analysis(
     dimensions: List[str],
     output_type: str = "table"
 ):
-    # 预处理：时间、星期、自然周
     def preprocess(data):
         df = pd.DataFrame(data)
         df['pdate'] = pd.to_datetime(df['pdate'])
@@ -19,7 +17,7 @@ def compare_analysis(
         df['weekday'] = df['pdate'].dt.dayofweek
         df['weekday_name'] = df['pdate'].dt.day_name()
         df['year_week'] = df['pdate'].dt.strftime('%G-W%V')
-        df['day_number'] = df.index + 1  # 月维度用
+        df['day_number'] = df.index + 1  # 用于月维度
         return df
 
     def extract_single_week(df):
@@ -114,7 +112,6 @@ def compare_analysis(
             ]
         }]
 
-    # 主流程
     is_month_mode = dimensions == ["month"]
 
     df1 = preprocess(data_source1)
@@ -138,7 +135,6 @@ def compare_analysis(
         summary1 = calculate_summary(first_df, metric)
         summary2 = calculate_summary(second_df, metric)
 
-        # 汇总输出
         output[f"{metric}_summary"] = {
             "第一组时间范围": first_label,
             "第二组时间范围": second_label,
@@ -153,15 +149,19 @@ def compare_analysis(
             "峰值增长率": growth_rate(summary2['peak_value'], summary1['peak_value']),
         }
 
-        # 表格数据构建
         table_data = []
 
         if is_month_mode:
             max_days = max(len(first_df), len(second_df))
             for i in range(max_days):
-                label = f"第{i+1}天"
+                # 日期字符串格式化
+                date1 = first_df.iloc[i]['pdate'].strftime('%y-%m-%d') if i < len(first_df) else "--"
+                date2 = second_df.iloc[i]['pdate'].strftime('%y-%m-%d') if i < len(second_df) else "--"
+                label = f"第{i + 1}天（{date1} ~ {date2}）"
+
                 val1 = first_df.iloc[i][metric] if i < len(first_df) else 0
                 val2 = second_df.iloc[i][metric] if i < len(second_df) else 0
+
                 table_data.append({
                     "日期": label,
                     "第一组": round(val1, 2),
