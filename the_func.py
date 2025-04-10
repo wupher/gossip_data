@@ -17,7 +17,7 @@ def compare_analysis(
         df['weekday'] = df['pdate'].dt.dayofweek
         df['weekday_name'] = df['pdate'].dt.day_name()
         df['year_week'] = df['pdate'].dt.strftime('%G-W%V')
-        df['day_number'] = df.index + 1  # 用于月维度
+        df['day_number'] = df.index + 1
         return df
 
     def extract_single_week(df):
@@ -74,42 +74,11 @@ def compare_analysis(
         peak_growth = growth_rate(peak_val2, peak_val1)
 
         return (
+            f"{metric_name}方面：\n"
             f"{week_label1} 总营收为 {int(total1):,} 元，{week_label2} 为 {int(total2):,} 元，增长率为 {total_growth}。\n"
             f"{week_label1} 日均营收为 {int(avg1):,} 元，{week_label2} 为 {int(avg2):,} 元，增长率为 {avg_growth}。\n"
             f"{week_label1} 单日峰值为 {peak_day1} {int(peak_val1):,} 元，{week_label2} 为 {peak_day2} {int(peak_val2):,} 元，增长率为 {peak_growth}。\n"
         )
-
-    def generate_echarts_line(metric, table_data, first_label, second_label):
-        x_data = [row["日期"] for row in table_data]
-        first_data = [row["第一组"] for row in table_data]
-        second_data = [row["第二组"] for row in table_data]
-
-        return [{
-            "xAxis": {
-                "type": "category",
-                "data": x_data
-            },
-            "yAxis": {
-                "type": "value"
-            },
-            "legend": {
-                "data": [first_label, second_label]
-            },
-            "series": [
-                {
-                    "name": first_label,
-                    "data": first_data,
-                    "type": "line",
-                    "smooth": True
-                },
-                {
-                    "name": second_label,
-                    "data": second_data,
-                    "type": "line",
-                    "smooth": True
-                }
-            ]
-        }]
 
     # 主流程
     is_month_mode = dimensions == ["month"]
@@ -129,7 +98,8 @@ def compare_analysis(
 
     weekday_map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
     output = {}
-    report_parts = []  # 收集所有指标的分析报告
+    report_parts = []
+    table_data_all = []  # 用于生成合并后的 line chart
 
     for metric in metrics:
         summary1 = calculate_summary(first_df, metric)
@@ -181,13 +151,45 @@ def compare_analysis(
 
         output[f"{metric}_table"] = table_data
         output[f"{metric}_tablemd"] = build_markdown_table(table_data)
-
-        # 统一合并报告
-        report_text = generate_report(metric, summary1, summary2, first_label, second_label)
-        report_parts.append(f"【{metric}】\n{report_text.strip()}")
+        report_parts.append(f"【{metric}】\n{generate_report(metric, summary1, summary2, first_label, second_label).strip()}")
 
         if output_type == "line":
-            output[f"{metric}_line"] = generate_echarts_line(metric, table_data, first_label, second_label)
+            x_axis = [row["日期"] for row in table_data]
+            y_axis = [row["第一组"] for row in table_data]
+            table_data_all.append({
+                "metric": metric,
+                "x": x_axis,
+                "y": y_axis
+            })
 
     output["report"] = "\n\n".join(report_parts)
+
+    if output_type == "line" and table_data_all:
+        # 构建合并后的折线图
+        x_data = table_data_all[0]["x"]
+        line_config = {
+            "xAxis": {
+                "type": "category",
+                "data": x_data
+            },
+            "yAxis": {
+                "type": "value"
+            },
+            "legend": {
+                "data": []
+            },
+            "series": []
+        }
+
+        for item in table_data_all:
+            line_config["legend"]["data"].append(item["metric"])
+            line_config["series"].append({
+                "name": item["metric"],
+                "data": item["y"],
+                "type": "line",
+                "smooth": True
+            })
+
+        output["line"] = [line_config]
+
     return output
