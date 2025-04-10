@@ -74,7 +74,6 @@ def compare_analysis(
         peak_growth = growth_rate(peak_val2, peak_val1)
 
         return (
-            f"{metric_name}方面：\n"
             f"{week_label1} 总营收为 {int(total1):,} 元，{week_label2} 为 {int(total2):,} 元，增长率为 {total_growth}。\n"
             f"{week_label1} 日均营收为 {int(avg1):,} 元，{week_label2} 为 {int(avg2):,} 元，增长率为 {avg_growth}。\n"
             f"{week_label1} 单日峰值为 {peak_day1} {int(peak_val1):,} 元，{week_label2} 为 {peak_day2} {int(peak_val2):,} 元，增长率为 {peak_growth}。\n"
@@ -112,8 +111,8 @@ def compare_analysis(
             ]
         }]
 
+    # 主流程
     is_month_mode = dimensions == ["month"]
-
     df1 = preprocess(data_source1)
     df2 = preprocess(data_source2)
 
@@ -130,6 +129,7 @@ def compare_analysis(
 
     weekday_map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
     output = {}
+    report_parts = []  # 收集所有指标的分析报告
 
     for metric in metrics:
         summary1 = calculate_summary(first_df, metric)
@@ -154,10 +154,9 @@ def compare_analysis(
         if is_month_mode:
             max_days = max(len(first_df), len(second_df))
             for i in range(max_days):
-                # 日期字符串格式化
                 date1 = first_df.iloc[i]['pdate'].strftime('%y-%m-%d') if i < len(first_df) else "--"
                 date2 = second_df.iloc[i]['pdate'].strftime('%y-%m-%d') if i < len(second_df) else "--"
-                label = f"第{i + 1}天（{date1} ~ {date2}）"
+                label = f"第{i+1}天（{date1} ~ {date2}）"
 
                 val1 = first_df.iloc[i][metric] if i < len(first_df) else 0
                 val2 = second_df.iloc[i][metric] if i < len(second_df) else 0
@@ -182,9 +181,13 @@ def compare_analysis(
 
         output[f"{metric}_table"] = table_data
         output[f"{metric}_tablemd"] = build_markdown_table(table_data)
-        output[f"{metric}_report"] = generate_report(metric, summary1, summary2, first_label, second_label)
+
+        # 统一合并报告
+        report_text = generate_report(metric, summary1, summary2, first_label, second_label)
+        report_parts.append(f"【{metric}】\n{report_text.strip()}")
 
         if output_type == "line":
             output[f"{metric}_line"] = generate_echarts_line(metric, table_data, first_label, second_label)
 
+    output["report"] = "\n\n".join(report_parts)
     return output
