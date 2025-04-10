@@ -80,6 +80,5 @@ data_source2 = [
 ]
 
 result = compare_analysis(data_source1, data_source2, metrics=["origin_revenue", 'voucher_box_revenue'],
-                          dimensions=["month"], output_type="line")
+                          dimensions=["pdate"], output_type="line")
 pprint(result)
-

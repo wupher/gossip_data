@@ -15,7 +15,6 @@ def compare_analysis(
         df['pdate'] = pd.to_datetime(df['pdate'])
         df = df.sort_values(by='pdate').reset_index(drop=True)
         df['weekday'] = df['pdate'].dt.dayofweek
-        df['weekday_name'] = df['pdate'].dt.day_name()
         df['year_week'] = df['pdate'].dt.strftime('%G-W%V')
         df['day_number'] = df.index + 1
         return df
@@ -48,14 +47,6 @@ def compare_analysis(
             return "N/A"
         return f"{((new - old) / old * 100):.2f}%"
 
-    def build_markdown_table(table_data):
-        header = "| 日期 | 第一组 | 第二组 | 增长率 |\n"
-        separator = "|------|--------|--------|--------|\n"
-        rows = ""
-        for row in table_data:
-            rows += f"| {row['日期']} | {row['第一组']} | {row['第二组']} | {row['增长率']} |\n"
-        return header + separator + rows
-
     def extract_day_label(date_str):
         return pd.to_datetime(date_str).strftime("%-m月%-d号")
 
@@ -80,7 +71,7 @@ def compare_analysis(
             f"{week_label1} 单日峰值为 {peak_day1} {int(peak_val1):,} 元，{week_label2} 为 {peak_day2} {int(peak_val2):,} 元，增长率为 {peak_growth}。\n"
         )
 
-    # 主流程
+    # 主流程开始
     is_month_mode = dimensions == ["month"]
     df1 = preprocess(data_source1)
     df2 = preprocess(data_source2)
@@ -96,10 +87,11 @@ def compare_analysis(
     first_label = get_week_date_range_label(first_df)
     second_label = get_week_date_range_label(second_df)
 
-    weekday_map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
     output = {}
     report_parts = []
-    table_data_all = []  # 用于生成合并后的 line chart
+    table_rows = {}
+    line_series = []
+    labels = []  # 横坐标（时间）
 
     for metric in metrics:
         summary1 = calculate_summary(first_df, metric)
@@ -119,7 +111,10 @@ def compare_analysis(
             "峰值增长率": growth_rate(summary2['peak_value'], summary1['peak_value']),
         }
 
-        table_data = []
+        report_parts.append(f"【{metric}】\n{generate_report(metric, summary1, summary2, first_label, second_label).strip()}")
+
+        this_labels = []
+        this_vals1 = []
 
         if is_month_mode:
             max_days = max(len(first_df), len(second_df))
@@ -127,69 +122,89 @@ def compare_analysis(
                 date1 = first_df.iloc[i]['pdate'].strftime('%y-%m-%d') if i < len(first_df) else "--"
                 date2 = second_df.iloc[i]['pdate'].strftime('%y-%m-%d') if i < len(second_df) else "--"
                 label = f"第{i+1}天（{date1} ~ {date2}）"
-
                 val1 = first_df.iloc[i][metric] if i < len(first_df) else 0
                 val2 = second_df.iloc[i][metric] if i < len(second_df) else 0
+                growth = growth_rate(val2, val1)
 
-                table_data.append({
-                    "日期": label,
-                    "第一组": round(val1, 2),
-                    "第二组": round(val2, 2),
-                    "增长率": growth_rate(val2, val1)
-                })
+                if label not in table_rows:
+                    table_rows[label] = {"日期": label}
+                table_rows[label][f"增长率（{metric}）"] = growth
+                table_rows[label][f"第一组（{metric}）"] = round(val1, 2)
+                table_rows[label][f"第二组（{metric}）"] = round(val2, 2)
+
+                this_labels.append(label)
+                this_vals1.append(round(val1, 2))
         else:
+            weekday_map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
             for i in range(7):
                 label = weekday_map[i]
                 val1 = first_df[first_df['weekday'] == i][metric].sum()
                 val2 = second_df[second_df['weekday'] == i][metric].sum()
-                table_data.append({
-                    "日期": label,
-                    "第一组": round(val1, 2),
-                    "第二组": round(val2, 2),
-                    "增长率": growth_rate(val2, val1)
-                })
+                growth = growth_rate(val2, val1)
 
-        output[f"{metric}_table"] = table_data
-        output[f"{metric}_tablemd"] = build_markdown_table(table_data)
-        report_parts.append(f"【{metric}】\n{generate_report(metric, summary1, summary2, first_label, second_label).strip()}")
+                if label not in table_rows:
+                    table_rows[label] = {"日期": label}
+                table_rows[label][f"增长率（{metric}）"] = growth
+                table_rows[label][f"第一组（{metric}）"] = round(val1, 2)
+                table_rows[label][f"第二组（{metric}）"] = round(val2, 2)
+
+                this_labels.append(label)
+                this_vals1.append(round(val1, 2))
 
         if output_type == "line":
-            x_axis = [row["日期"] for row in table_data]
-            y_axis = [row["第一组"] for row in table_data]
-            table_data_all.append({
-                "metric": metric,
-                "x": x_axis,
-                "y": y_axis
+            line_series.append({
+                "name": metric,
+                "data": this_vals1,
+                "type": "line",
+                "smooth": True
             })
+
+        if not labels:  # 记录第一轮的 labels 作为 x 轴
+            labels = this_labels
 
     output["report"] = "\n\n".join(report_parts)
 
-    if output_type == "line" and table_data_all:
-        # 构建合并后的折线图
-        x_data = table_data_all[0]["x"]
-        line_config = {
+    # 构造表格数据
+    sorted_rows = [table_rows[k] for k in sorted(table_rows.keys())]
+
+    # 指定列顺序
+    all_columns = ["日期"]
+    for metric in metrics:
+        all_columns += [
+            f"增长率（{metric}）",
+            f"第一组（{metric}）",
+            f"第二组（{metric}）"
+        ]
+
+    # Markdown 表格生成
+    tablemd = "| " + " | ".join(all_columns) + " |\n"
+    tablemd += "| " + " | ".join(["--"] * len(all_columns)) + " |\n"
+    for row in sorted_rows:
+        line = [str(row.get(col, "")) for col in all_columns]
+        tablemd += "| " + " | ".join(line) + " |\n"
+
+    # 构造 line 配置
+    line_config = []
+    if output_type == "line" and line_series:
+        line_config = [{
             "xAxis": {
                 "type": "category",
-                "data": x_data
+                "data": labels
             },
             "yAxis": {
                 "type": "value"
             },
             "legend": {
-                "data": []
+                "data": [s["name"] for s in line_series]
             },
-            "series": []
-        }
+            "series": line_series
+        }]
 
-        for item in table_data_all:
-            line_config["legend"]["data"].append(item["metric"])
-            line_config["series"].append({
-                "name": item["metric"],
-                "data": item["y"],
-                "type": "line",
-                "smooth": True
-            })
-
-        output["line"] = [line_config]
+    # 可视化输出统一封装
+    output["visualization"] = {
+        "table": sorted_rows,
+        "tablemd": tablemd,
+        "line": line_config
+    }
 
     return output
