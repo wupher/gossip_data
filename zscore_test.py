@@ -1,9 +1,9 @@
 import pandas as pd
 
+import ZScore
 import holiday_util
-from holiday_util import merge_holiday
 
-data =  [
+data = [
   {
     "pdate": "2025-03-17",
     "origin_revenue": 752380.00,
@@ -36,14 +36,14 @@ data =  [
   },
   {
     "pdate": "2025-03-23",
-    "origin_revenue": 1315300.00,
-    "voucher_box_revenue": 145000.00
+    "origin_revenue": -12.00,
+    "voucher_box_revenue": -123.00
   }
 ]
 
+# process_data
 df = pd.DataFrame(data)
 df['pdate'] = pd.to_datetime(df['pdate'])
-df = df.sort_values(by='pdate').reset_index(drop=True)
-df = merge_holiday(df, holiday_util.holiday_df)
-
+df = holiday_util.merge_holiday(df, holiday_util.holiday_df)
+df = df.groupby("description", group_keys=False).apply(ZScore.zscore_outliner)
 print(df)
