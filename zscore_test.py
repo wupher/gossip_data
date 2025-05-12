@@ -47,3 +47,6 @@ df['pdate'] = pd.to_datetime(df['pdate'])
 df = holiday_util.merge_holiday(df, holiday_util.holiday_df)
 df = df.groupby("description", group_keys=False).apply(ZScore.zscore_outliner)
 print(df)
+
+report = ZScore.generate_report(df, col="origin_revenue")
+print(report)
