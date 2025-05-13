@@ -1,13 +1,14 @@
+import pandas as pd
 from statsmodels.tsa.seasonal import STL
 
 
-def stl_outliner(analysis_data: pd.DataFrame, col: str = "origin_revenue", threshold: float = 2.0, period: int = 12):
+def stl_outliner(analysis_data: pd.DataFrame, col: str = "origin_revenue", threshold: float = 1.2, period: int = 7):
     """
     根据 STL 算法检测异常数据
     :param analysis_data: pd.DataFrame，输入数据
     :param col: str，要分析的列名
     :param threshold: float，异常值的阈值
-    :param period: int，STL 分解的周期长度
+    :param period: int，STL 分解的周期长度，默认7
     :return: 带有标记异常数据的 DataFrame
     """
     group = analysis_data.copy()
